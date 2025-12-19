@@ -1,7 +1,7 @@
 from .database import Base, engine,get_db
 from . import models
 from .models import PredictionHistory
-from .schemas import UserRegistre,PredictionResponse,PredictRequest
+from .schemas import UserRegistre,PredictionResponse,PredictRequest,RetentionPlanForEmployees
 from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
 from .security import hash_password, verify_password 
@@ -12,9 +12,11 @@ import os
 import requests
 import joblib
 import pandas as pd
+from app.gemini_service import generate_retention_plan_gemini
+
 
 Base.metadata.create_all(bind=engine)
-model = joblib.load("best_model.pkl")
+model = joblib.load("ml/best_model.pkl")
 
 app=FastAPI()
 origins = [
@@ -58,15 +60,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @app.post("/predict",response_model=PredictionResponse)
 def prediction( data: PredictRequest ,token=Depends(OAuth2_scheme),db: Session = Depends(get_db)):
     username = verify_token(token)
-
-    
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur introuvable")
     features = pd.DataFrame([data.dict(exclude={"employee_id"})])
     probability = model.predict_proba(features)[0][1]
-
-    
     prediction = PredictionHistory(
         user_id=user.id,
         employee_id=data.employee_id,
@@ -77,3 +75,23 @@ def prediction( data: PredictRequest ,token=Depends(OAuth2_scheme),db: Session =
     db.commit()
     db.refresh(prediction)
     return {"churn_probability":probability}
+
+
+@app.post("/generate-retention-plan", response_model=RetentionPlanForEmployees)
+def create_retention_plan(request: PredictRequest):
+    # Exemple fixe pour test, tu peux remplacer par ton modèle ML réel
+    churn_probability = 0.6  
+
+    if churn_probability < 0.5:
+        raise HTTPException(
+            status_code=400,
+            detail="Le risque de départ est trop faible pour générer un plan de rétention."
+        )
+
+    # Ici, on passe tout le dict de l'employé comme attendu par le service
+    plan = generate_retention_plan_gemini(request.dict(), churn_probability)
+    
+    return RetentionPlanForEmployees(
+        employee_id=request.employee_id,
+        retention_plan=plan
+    )

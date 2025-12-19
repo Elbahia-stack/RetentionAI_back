@@ -33,3 +33,7 @@ class PredictRequest(BaseModel):
     JobRole: str
     MaritalStatus: str
     OverTime: str
+
+class RetentionPlanForEmployees(BaseModel):
+    employee_id: str
+    retention_plan: list[str]
