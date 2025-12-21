@@ -1,10 +1,11 @@
 import pytest
 import joblib
 import pandas as pd
-
+import os
 # Charger le modèle ML
-model = joblib.load("ml/best_model.pkl")
+model_path = os.path.join(os.path.dirname(__file__), "../ml/best_model.pkl")
 
+model = joblib.load(model_path)
 def test_model_prediction_shape():
     # Exemple de features similaires à PredictRequest
     data = pd.DataFrame([{
